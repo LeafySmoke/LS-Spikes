@@ -14,13 +14,32 @@ Config.Deflation = {
     WobbleThreshold = 40.0 -- Speed in MPH/KPH where wobble starts
 }
 
-Config.Models = {
-    Spike = "p_ld_stoppad_s", -- Standard GTA spike pad
+Config.Items = {
+    stopstick = {
+        label = "Stop Stick",
+        model = "p_ld_stoppad_s",
+        placementDistance = 1.5,
+        headingOffset = 0.0,
+        freezeOnPlace = false,
+        segmentCount = 1,
+        segmentSpacing = 1.5,
+        hitDistance = 1.1
+    },
+    spikestrip = {
+        label = "Spike Strip",
+        model = "p_ld_stinger_s",
+        placementDistance = 2.0,
+        headingOffset = 0.0, -- Place in the same direction the player is facing
+        freezeOnPlace = true, -- Prevent vehicle impacts from pushing the strip around
+        segmentCount = 3, -- Chain segments for a longer strip
+        segmentSpacing = 2.5,
+        hitDistance = 2.4
+    }
 }
 
 Config.Animations = {
     Deploy = {
-        dict = "amb@medic@standing@tendtopat@enter",
+        dict = "amb@medic@standing@kneel@enter",
         anim = "enter"
     }
 }

@@ -2,17 +2,60 @@ local QBCore = exports["qb-core"]:GetCoreObject()
 local isPulling = false
 local currentStrip = nil
 
+local function getItemConfig(itemName)
+    return Config.Items[itemName] or Config.Items.stopstick
+end
+
+local function getSpikeModels()
+    local models = {}
+    for _, itemData in pairs(Config.Items) do
+        if itemData.model then
+            models[#models + 1] = itemData.model
+        end
+    end
+    return models
+end
+
+local function findClosestSpikeObject(coords, radius)
+    local closestObject = 0
+    local closestDistance = radius + 0.01
+
+    for _, model in ipairs(getSpikeModels()) do
+        local object = GetClosestObjectOfType(coords.x, coords.y, coords.z, radius, joaat(model), false, false, false)
+        if object ~= 0 then
+            local distance = #(coords - GetEntityCoords(object))
+            if distance < closestDistance then
+                closestDistance = distance
+                closestObject = object
+            end
+        end
+    end
+
+    return closestObject
+end
+
+local WHEELS = {
+    { bone = "wheel_lf", index = 0 },
+    { bone = "wheel_rf", index = 1 },
+    { bone = "wheel_lm", index = 2 },
+    { bone = "wheel_rm", index = 3 },
+    { bone = "wheel_lr", index = 4 },
+    { bone = "wheel_rr", index = 5 },
+}
+
 --- Deployment Logic
-RegisterNetEvent("swisser_spikes:client:deploy", function()
+RegisterNetEvent("ls_spikes:client:deploy", function(itemName)
     local ped = PlayerPedId()
     if IsPedInAnyVehicle(ped, false) then return end
 
+    local itemConfig = getItemConfig(itemName)
+
     local coords = GetEntityCoords(ped)
     local forward = GetEntityForwardVector(ped)
-    local spawnPos = coords + (forward * 1.5)
+    local spawnPos = coords + (forward * (itemConfig.placementDistance or 1.5))
 
     -- Check incline/interior
-    local _, groundZ = GetGroundZFor_3dCoord(spawnPos.x, spawnPos.y, spawnPos.z, 0)
+    local _, groundZ = GetGroundZFor_3dCoord(spawnPos.x, spawnPos.y, spawnPos.z, false)
     if GetInteriorFromEntity(ped) ~= 0 then
         lib.notify({ title = "Invalid Area", description = "Cannot deploy indoors", type = "error" })
         return
@@ -20,19 +63,33 @@ RegisterNetEvent("swisser_spikes:client:deploy", function()
 
     if lib.progressBar({
         duration = 2500,
-        label = "Deploying Stop Stick...",
+        label = ("Deploying %s..."):format(itemConfig.label or "Spike Strip"),
         useWhileDead = false,
         canCancel = true,
         disable = { move = true, car = true },
         anim = { dict = Config.Animations.Deploy.dict, clip = Config.Animations.Deploy.anim }
     }) then
-        lib.requestModel(Config.Models.Spike)
-        local spike = CreateObject(Config.Models.Spike, spawnPos.x, spawnPos.y, groundZ, true, true, false)
-        PlaceObjectOnGroundProperly(spike)
-        SetEntityHeading(spike, GetEntityHeading(ped))
-        
-        local netId = NetworkGetNetworkIdFromEntity(spike)
-        TriggerServerEvent("swisser_spikes:server:registerStrip", netId, spawnPos)
+        lib.requestModel(itemConfig.model)
+        local heading = GetEntityHeading(ped) + (itemConfig.headingOffset or 0.0)
+        local segmentCount = math.max(1, itemConfig.segmentCount or 1)
+        local segmentSpacing = itemConfig.segmentSpacing or 1.5
+
+        for i = 1, segmentCount do
+            local segmentPos = spawnPos + (forward * ((i - 1) * segmentSpacing))
+            local _, segmentGroundZ = GetGroundZFor_3dCoord(segmentPos.x, segmentPos.y, segmentPos.z, false)
+
+            local spike = CreateObject(itemConfig.model, segmentPos.x, segmentPos.y, segmentGroundZ, true, true, false)
+            PlaceObjectOnGroundProperly(spike)
+            SetEntityHeading(spike, heading)
+
+            if itemConfig.freezeOnPlace then
+                FreezeEntityPosition(spike, true)
+                SetEntityDynamic(spike, false)
+            end
+
+            local netId = NetworkGetNetworkIdFromEntity(spike)
+            TriggerServerEvent("ls_spikes:server:registerStrip", netId, segmentPos, itemName, i == 1)
+        end
     end
 end)
 
@@ -58,8 +115,8 @@ local function pullStrip(entity)
                 local dir = vector3(pedCoords.x - spikeCoords.x, pedCoords.y - spikeCoords.y, 0.0)
                 local norm = norm(dir)
                 local move = spikeCoords + (norm * 0.05)
-                SetEntityCoords(entity, move.x, move.y, spikeCoords.z)
-                TriggerServerEvent("swisser_spikes:server:syncPull", NetworkGetNetworkIdFromEntity(entity), move)
+                SetEntityCoords(entity, move.x, move.y, spikeCoords.z, false, false, false, false)
+                TriggerServerEvent("ls_spikes:server:syncPull", NetworkGetNetworkIdFromEntity(entity), move)
             end
 
             if IsControlJustReleased(0, 47) or IsPedInAnyVehicle(ped, true) then
@@ -71,6 +128,7 @@ end
 
 function norm(v)
     local d = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+    if d == 0 then return vector3(0.0, 0.0, 0.0) end
     return vector3(v.x / d, v.y / d, v.z / d)
 end
 
@@ -106,19 +164,27 @@ CreateThread(function()
         
         if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
             local coords = GetEntityCoords(vehicle)
-            local spikes = GetClosestObjectOfType(coords.x, coords.y, coords.z, 5.0, joaat(Config.Models.Spike), false, false, false)
+            local spikes = findClosestSpikeObject(coords, 5.0)
             
             if spikes ~= 0 then
-                local spikeData = Entity(spikes).state.stripData
-                if spikeData then
-                    for i = 0, 7 do
-                        local wheelPos = GetWorldPositionOfEntityBone(vehicle, GetEntityBoneIndexByName(vehicle, "wheel_" .. i))
-                        local dist = #(wheelPos - GetEntityCoords(spikes))
-                        
-                        if dist < 1.0 then
-                            TriggerServerEvent("swisser_spikes:server:onHit", spikeData.id, NetworkGetNetworkIdFromEntity(vehicle))
-                            deflateTires(vehicle, i)
-                            Wait(500) -- Prevent multi-hit on same tire
+                for _, wheel in ipairs(WHEELS) do
+                    local boneIndex = GetEntityBoneIndexByName(vehicle, wheel.bone)
+                    if boneIndex ~= -1 then
+                        local wheelPos = GetWorldPositionOfEntityBone(vehicle, boneIndex)
+                        local nearbySpike = findClosestSpikeObject(wheelPos, 3.0)
+
+                        if nearbySpike ~= 0 then
+                            local spikeData = Entity(nearbySpike).state.stripData
+                            if spikeData then
+                                local hitDistance = (getItemConfig(spikeData.itemName).hitDistance or 1.0)
+                                local dist = #(wheelPos - GetEntityCoords(nearbySpike))
+
+                                if dist <= hitDistance then
+                                    TriggerServerEvent("ls_spikes:server:onHit", spikeData.id, NetworkGetNetworkIdFromEntity(vehicle))
+                                    deflateTires(vehicle, wheel.index)
+                                    Wait(500) -- Prevent multi-hit on same tire
+                                end
+                            end
                         end
                     end
                 end
@@ -131,7 +197,7 @@ CreateThread(function()
 end)
 
 --- Target Interactions
-exports.ox_target:addModel(Config.Models.Spike, {
+exports.ox_target:addModel(getSpikeModels(), {
     {
         name = "pickup_spike",
         icon = "fa-solid fa-hand-holding",
@@ -139,7 +205,7 @@ exports.ox_target:addModel(Config.Models.Spike, {
         onSelect = function(data)
             local state = Entity(data.entity).state.stripData
             if state then
-                TriggerServerEvent("swisser_spikes:server:pickup", state.id, NetworkGetNetworkIdFromEntity(data.entity))
+                TriggerServerEvent("ls_spikes:server:pickup", state.id, NetworkGetNetworkIdFromEntity(data.entity))
             end
         end
     },

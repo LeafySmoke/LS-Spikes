@@ -8,7 +8,10 @@ version "1.0.0"
 dependency "ox_lib"
 dependency "ox_target"
 
-shared_script "shared/config.lua"
+shared_scripts {
+    "@ox_lib/init.lua",
+    "shared/config.lua"
+}
 
 client_scripts {
     "client/main.lua"
