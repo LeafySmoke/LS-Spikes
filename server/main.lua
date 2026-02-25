@@ -1,3 +1,5 @@
+---@diagnostic disable: undefined-global
+
 local QBCore = exports["qb-core"]:GetCoreObject()
 local activeStrips = {}
 
@@ -95,7 +97,7 @@ RegisterNetEvent("ls_spikes:server:onHit", function(stripId, vehicleNetId)
     if not activeStrips[stripId] then return end
 
     activeStrips[stripId].durability = activeStrips[stripId].durability - 1
-    
+
     -- Update state bag
     local entity = NetworkGetEntityFromNetworkId(activeStrips[stripId].netId)
     if DoesEntityExist(entity) then
@@ -130,7 +132,7 @@ RegisterNetEvent("ls_spikes:server:pickup", function(stripId, netId)
 
     local entity = NetworkGetEntityFromNetworkId(netId)
     local stripData = activeStrips[stripId]
-    
+
     if DoesEntityExist(entity) then
         DeleteEntity(entity)
         activeStrips[stripId] = nil

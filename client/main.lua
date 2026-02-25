@@ -1,3 +1,5 @@
+---@diagnostic disable: undefined-global
+
 local QBCore = exports["qb-core"]:GetCoreObject()
 local isPulling = false
 local currentStrip = nil
@@ -97,7 +99,7 @@ end)
 local function pullStrip(entity)
     local ped = PlayerPedId()
     isPulling = true
-    
+
     CreateThread(function()
         while isPulling do
             Wait(0)
@@ -135,17 +137,17 @@ end
 --- Tire Deflation System
 local function deflateTires(vehicle, wheelIndex)
     if IsVehicleTyreBurst(vehicle, wheelIndex, false) then return end
-    
+
     lib.notify({ title = "Tire Punctured", description = "Slow leak detected...", type = "warning" })
-    
+
     local timer = 0
     local duration = Config.Deflation.Time
-    
+
     CreateThread(function()
         while timer < duration do
             Wait(1000)
             timer = timer + 1000
-            
+
             -- Visual/Handling Wobble
             if GetEntitySpeed(vehicle) * 2.23 > Config.Deflation.WobbleThreshold then
                 local currentSteer = GetVehicleSteeringAngle(vehicle)
@@ -161,11 +163,11 @@ CreateThread(function()
     while true do
         local ped = PlayerPedId()
         local vehicle = GetVehiclePedIsIn(ped, false)
-        
+
         if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
             local coords = GetEntityCoords(vehicle)
             local spikes = findClosestSpikeObject(coords, 5.0)
-            
+
             if spikes ~= 0 then
                 for _, wheel in ipairs(WHEELS) do
                     local boneIndex = GetEntityBoneIndexByName(vehicle, wheel.bone)
