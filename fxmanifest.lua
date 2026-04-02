@@ -1,8 +1,8 @@
 fx_version "cerulean"
 game "gta5"
 
-author "SwisserAI"
-description "Realistic Stop Stick Deployment - Generated with SwisserAI - https://ai.swisser.dev"
+author "LeafySmoke"
+description "Realistic Stop Stick Deployment with Durability and Deflation Mechanics"
 version "1.0.0"
 
 dependency "ox_lib"

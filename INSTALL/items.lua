@@ -1,0 +1,4 @@
+    --['spikestrip'] = {
+        --label = 'Spike Strip',
+        --weight = 1000,
+    --}, Example item config for a spike strip deployer
